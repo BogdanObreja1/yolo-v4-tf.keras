@@ -103,6 +103,10 @@ def draw_bbox(img, detections, cmap, random_color=True, figsize=(10, 10), show_i
         x1, y1, x2, y2, cls, score, w, h = row.values
         color = list(np.random.random(size=3) * 255) if random_color else cmap[cls]
         cv2.rectangle(img, (x1, y1), (x2, y2), color, line_width)
+        ROI = img[y1:y2, x1:x2]
+        plt.imshow(ROI)
+        print("ROI")
+        print(ROI.shape)
         if show_text:
             text = f'{cls} {score:.2f}'
             font = cv2.FONT_HERSHEY_DUPLEX

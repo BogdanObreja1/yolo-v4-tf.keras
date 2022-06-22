@@ -6,7 +6,7 @@ from tqdm import tqdm
 from glob import glob
 import matplotlib.pyplot as plt
 import tensorflow as tf
-from tensorflow.keras import layers, models, optimizers
+from keras import layers, models, optimizers
 
 from custom_layers import yolov4_neck, yolov4_head, nms
 from utils import load_weights, get_detection_data, draw_bbox, voc_ap, draw_plot_func, read_txt_to_list
@@ -107,6 +107,7 @@ class Yolov4(object):
                                 initial_epoch=initial_epoch)
     # raw_img: RGB
     def predict_img(self, raw_img, random_color=True, plot_img=True, figsize=(10, 10), show_text=True, return_output=False):
+
         print('img shape: ', raw_img.shape)
         img = self.preprocess_img(raw_img)
         imgs = np.expand_dims(img, axis=0)
@@ -114,7 +115,7 @@ class Yolov4(object):
         detections = get_detection_data(img=raw_img,
                                         model_outputs=pred_output,
                                         class_names=self.class_names)
-
+        print(detections)
         output_img = draw_bbox(raw_img, detections, cmap=self.class_color, random_color=random_color, figsize=figsize,
                   show_text=show_text, show_img=plot_img)
         if return_output:
