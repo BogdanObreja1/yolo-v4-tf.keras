@@ -1,0 +1,14 @@
+2022-06-25 07:38:42,237:INFO:select_pretrained_model_for_inference:1 was pressed. Loading the NYU model...
+2022-06-25 07:38:48,430:INFO:<module>:Model loaded (nyu.h5).
+2022-06-25 07:39:01,939:INFO:load_image_using_tkinter:Loaded Images: ['C:/Time Machine Code/yolo-v4-tf.keras/input_images/people.png']
+2022-06-25 07:39:02,056:INFO:resize_input_image:people.png has been upscaled from (408, 612) to (416, 640).The encoder architecture expects the image dimensions to be divisible by 32.
+2022-06-25 07:39:02,059:INFO:predict:Currently predicting the depth image of people.png ...
+2022-06-25 07:39:05,632:INFO:output_upscaled_input_and_depth_image:people.png finished processing! Image can be found in the output_images folder.
+2022-06-25 07:39:05,879:INFO:output_upscaled_input_and_depth_image:people_upscaled_depth.png finished processing! Image can be found in the output_images folder.
+2022-06-25 07:39:10,001:INFO:predict_img:Predicting objects in the input image using YOLOv4...
+2022-06-25 07:39:12,091:INFO:calculate_distance_to_object_using_median:The distance to Object_person _ID_0 using median is: 2.8943437337875366 meters.
+2022-06-25 07:39:12,092:INFO:calculate_distance_to_object_using_median:The distance to Object_person _ID_1 using median is: 3.2510334253311157 meters.
+2022-06-25 07:39:12,093:INFO:calculate_distance_to_object_using_median:The distance to Object_person _ID_2 using median is: 3.0723929405212402 meters.
+2022-06-25 07:39:12,093:INFO:calculate_distance_to_object_using_median:The distance to Object_handbag _ID_3 using median is: 3.9601945877075195 meters.
+2022-06-25 07:39:12,093:INFO:calculate_distance_to_object_using_median:The distance to Object_tie _ID_4 using median is: 3.229300081729889 meters.
+2022-06-25 07:39:12,176:INFO:output_yolo_image_with_distances:people_yolo_with_distance.png finished processing! Image can be found in the output_images folder.

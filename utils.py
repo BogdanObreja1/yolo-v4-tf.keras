@@ -5,8 +5,869 @@ import operator
 import matplotlib.pyplot as plt
 import os
 from sklearn.model_selection import train_test_split
-from tensorflow.keras.utils import Sequence
+from keras.utils import Sequence
 from config import yolo_config
+from PIL import Image
+from skimage.transform import resize
+import logging
+import keyboard
+import time
+from keyboard_bindings import keyboard_numbers_binding as keyboard_binding
+from tkinter import Tk, Label, Button
+from tkinter import filedialog
+import copy
+from scipy.stats import iqr
+
+
+def initialize_model_logger():
+    """"
+    The method below sets and initiates the Depth Model logger.
+    The model logger tasks are:
+    1. To print on the screen different message types (DEBUG, INFO, ERROR, CRITICAL).
+    2. Write the messages in the depth_model.log which can be found in logger folder.
+    (Created Function)
+    """
+
+    # Logging to specific logger which can be configure separately for each script
+    logger_model = logging.getLogger(__name__)
+
+    # Set the lowest level of "errors" that you want to see in log.
+    logger_model.setLevel(logging.DEBUG)
+
+    # Set the file where the logger messages should be written(relative path).
+    dir = os.path.dirname(__file__)
+    logger_path = os.path.join(dir, 'logger', 'depth_logger.log')
+
+    # Set the file where the file_handler should write the messages. The "w" means that it deletes everything that
+    # was written before (such that the file doesn't get too big)
+    file_handler = logging.FileHandler(logger_path, "w")
+
+    # Setting up the message format of the logger as follows:
+    # 1. "%(asctime)s:" - Time and date when the message was written/printed.
+    # 2. "%(levelname)s" - Text logging level for the message.
+    # 3. "%(funcName)s" - Name of the function containing the logging call.
+    # 4. "%(message)s" - The logged message.
+    formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(funcName)s:%(message)s')
+
+    # Sets the format for the file_handler
+    file_handler.setFormatter(formatter)
+    logger_model.addHandler(file_handler)
+
+    # Sets the stream_handler and the format for the stream_handler (to print in the console)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    logger_model.addHandler(stream_handler)
+
+    return logger_model
+
+
+def clear_keyboard_inputs():
+    """"
+    Clear the last user input (after processing it)
+    (Created Function)
+    """
+    keyboard.unhook_all()
+    keyboard.clear_all_hotkeys()
+    time.sleep(0.3)
+
+
+def select_pretrained_model_for_inference(logger_model):
+    """"
+    Interface that allows the user to select the pre-trained model on which to run inference.
+    (Created Function)
+    """
+    print(
+        "Select the pre-trained model for inference by pressing the keyboard corresponding number (e.g press 1 for NYU):")
+    print("1.NYU Depth v2 (indoor scenes)")
+    print("2.KITTI (outdoor scenes)")
+    while True:
+
+        if keyboard.is_pressed(keyboard_binding[1]):
+            logger_model.info("1 was pressed. Loading the NYU model...")
+            model_selected_name = 'nyu.h5'
+            clear_keyboard_inputs()
+            break
+
+        elif keyboard.is_pressed(keyboard_binding[2]):
+            logger_model.info("2 was pressed. Loading the KITTI model...")
+            model_selected_name = 'kitti.h5'
+            clear_keyboard_inputs()
+            break
+
+    return model_selected_name
+
+
+def load_images_using_tkinter(logger_model):
+    """
+    Import an image or a batch of images (.png only) using tkinter from a user selected file.
+    (Created Function)
+    """
+
+    # Create the tkinter window
+    window = Tk()
+
+    # Add a Label widget
+    label = Label(window, text="Press the button below to open a file from which to load the input Image(s)",
+                  font=('Aerial 11'))
+    label.pack(pady=30)
+    # Add the Button Widget
+    Button(window, text="Load Image(s) from folder").pack()
+    dir = os.path.dirname(__file__)
+    # Initial directory from which to select the images
+    initial_dir = os.path.join(dir, 'input_images')
+    images = filedialog.askopenfilenames(parent=window, initialdir=initial_dir,
+                                         title="Load input image(s) from a specific folder",
+                                         filetypes=[("png files", "*.png")])
+
+    images = list(images)
+    window.destroy()
+    logger_model.info("Loaded Images: " + str(images)[:])
+    return images
+
+def load_image_using_tkinter(logger_model):
+    """
+    Import an image (.png only) using tkinter from a user selected file.
+    (Created Function)
+    """
+
+    # Create the tkinter window
+    window = Tk()
+
+    # Add a Label widget
+    label = Label(window, text="Press the button below to open a file from which to load the input Image",
+                  font=('Aerial 11'))
+    label.pack(pady=30)
+    # Add the Button Widget
+    Button(window, text="Load Image from folder").pack()
+    dir = os.path.dirname(__file__)
+    # Initial directory from which to select the images
+    initial_dir = os.path.join(dir, 'input_images')
+    image = filedialog.askopenfilename(parent=window, initialdir=initial_dir,
+                                         title="Load input image from a specific folder",
+                                         filetypes=[("png files", "*.png")])
+
+    image = [image]
+    window.destroy()
+    logger_model.info("Loaded Images: " + str(image)[:])
+    return image
+
+
+def load_images(image_files, logger_model):
+    """"
+    (Modified function)
+    -> Added the option to load images of different sizes (before all input images had to be the same size).
+    -> The encoder architecture expects the image dimensions to be divisible by 32. Hence for the images where this
+    is not the case, we upscale the width/height to the closest number divisible by 32.
+    -> Makes sure to convert non-RGB format images to the RGB standard format (3 channels) - Requirement for the model.
+      (Palettised colored images can also be used)
+    -> Before you were only able to input images with the same width and height. Now it doesn't matter anymore.
+    """
+    loaded_images = []
+    loaded_images_name = []
+    for file in image_files:
+        x = np.array(Image.open(file))
+        parsed_file_name = file.split("/")
+        input_image_name = parsed_file_name[-1]
+        loaded_images_name.append(input_image_name)
+        x = convert_to_rgb_format(x, file, logger_model, input_image_name)
+        x = resize_input_image(x, logger_model, input_image_name)
+        loaded_images.append(np.stack(x))
+
+    # return np.stack(loaded_images, axis=0)
+    return loaded_images, loaded_images_name
+
+
+def convert_to_rgb_format(image, image_path, logger_model, input_image_name):
+    """
+    Makes sure to convert non-RGB format images to the RGB standard format (3 channels) - Requirement for the model.
+      (Palettised colored images can also be used)
+    (Created function)
+    """
+
+    # Had a case where a coloured image was "palettised" (2 channels only) - palettised.png in the input_images.
+    # Hence in order to solve this issue, we first convert the image to "RGB".
+    if image.ndim != 3 or image.shape[-1] != 3:
+        image = np.clip(np.asarray(Image.open(image_path).convert('RGB')) / 255, 0, 1)
+        logger_model.info(input_image_name + " is not in RGB format. Converting to RGB format...")
+    else:
+        image = np.clip(np.asarray(Image.open(image_path), dtype=float) / 255, 0, 1)
+    return image
+
+
+def resize_input_image(image, logger_model, input_image_name):
+    """"
+    The encoder architecture expects the image dimensions to be divisible by 32. Hence for the images where this
+    is not the case, we upscale the width/height to the closest number divisible by 32.
+    Upscaling method used: biliniar
+    (Created Function)
+    """
+    height , width, channels = image.shape
+    input_shape = (height, width)
+    output_width = width
+    output_height = height
+    is_input_image_upscaled = 0
+
+    if width % 32 != 0:
+        output_width = width + (32 - width % 32)
+        is_input_image_upscaled = 1
+
+    if height % 32 != 0:
+        output_height = height + (32 - height % 32)
+        is_input_image_upscaled = 1
+
+    output_shape = (output_height, output_width)
+
+    image = resize(image, output_shape, order=1, preserve_range=True, mode='reflect', anti_aliasing=True)
+
+    if is_input_image_upscaled == 1:
+        logger_model.info(
+            input_image_name + " has been upscaled from " + str(input_shape) + " to " + str(output_shape) +
+            ".The encoder architecture expects the image dimensions to be divisible by 32.")
+
+    return image
+
+
+def predict(model, images, logger_model, loaded_input_images_name, minDepth=10, maxDepth=1000, batch_size=1):
+    """
+    (Modified function)
+    -> Now allows the user to load images of different sizes.
+    """
+    # Support multiple RGBs, one RGB image, even grayscale
+    output_images = []
+    i = 0
+    for image in images:
+
+        logger_model.info("Currently predicting the depth image of " + loaded_input_images_name[i] + " ...")
+        if len(image.shape) < 3: image = np.stack((image, image, image), axis=2)
+        if len(image.shape) < 4: image = image.reshape((1, image.shape[0], image.shape[1], image.shape[2]))
+        # Compute predictions
+        predictions = model.predict(image, batch_size=batch_size)
+        # Put in expected range
+        output_images.append(np.clip(DepthNorm(predictions, maxDepth=maxDepth), minDepth, maxDepth) / maxDepth)
+        i += 1
+    return output_images
+
+
+def output_depth_images(outputs, logger_model, inputs=None, loaded_input_images_name=None):
+    """
+    (Created function)
+    Output the depth images along with the input images to the output_images folder.
+    """
+    import matplotlib.pyplot as plt
+    from skimage.transform import resize
+    for index in range(len(outputs)):
+        plasma = plt.get_cmap('plasma')
+
+        dir = os.path.dirname(__file__)
+        # Output directory for images
+        output_dir = os.path.join(dir, 'output_images')
+
+        name_pic = loaded_input_images_name[index].split(".")
+        name_pic = name_pic[0]
+
+        # Output the input image
+        im1 = Image.fromarray(np.uint8(inputs[index] * 255))
+        im1.save(output_dir + "\\" + loaded_input_images_name[index])
+        logger_model.info(
+            loaded_input_images_name[index] + " finished processing! Image can be found in the output_images folder.")
+
+        rescaled = outputs[index][0][:, :, 0]
+        rescaled = rescaled - np.min(rescaled)
+        rescaled = rescaled / np.max(rescaled)
+
+        # Output the Colored Depth Image with Original Output Size of the algorithm (w/2, h/2)
+        colored_depth_image = np.uint8(plasma(rescaled)[:, :, :3] * 255)
+        im2 = Image.fromarray(colored_depth_image)
+        colored_depth_image_name = name_pic + "_depth_colored.png"
+        im2.save(output_dir + "\\" + colored_depth_image_name)
+        logger_model.info(
+            colored_depth_image_name + " finished processing! Image can be found in the output_images folder.")
+
+        # Output the "black/white" Depth Image with Original Output Size of the algorithm (w/2, h/2)
+        depth_image = np.uint8(to_multichannel(outputs[index][0] * 255))
+        im3 = Image.fromarray(depth_image)
+        depth_image_name = name_pic + "_depth.png"
+        im3.save(output_dir + "\\" + depth_image_name)
+        logger_model.info(depth_image_name + " finished processing! Image can be found in the output_images folder.")
+
+        # Output the Colored Depth Image(width, height are the same as the input image)
+        upscaled_colored_depth_image_shape = (2 * rescaled.shape[0], 2 * rescaled.shape[1])
+        upscaled_colored_depth_image = np.uint8((resize(colored_depth_image, upscaled_colored_depth_image_shape,
+                                                        order=3, preserve_range=True, mode='reflect',
+                                                        anti_aliasing=True)))
+        im4 = Image.fromarray(upscaled_colored_depth_image)
+        upscaled_colored_depth_image_name = name_pic + "_upscaled_depth_colored.png"
+        im4.save(output_dir + "\\" + upscaled_colored_depth_image_name)
+        logger_model.info(
+            upscaled_colored_depth_image_name + " finished processing! Image can be found in the output_images folder.")
+
+        # Output the "black/white" Depth Image(width, height are the same as the input image)
+        upscaled_depth_image_shape = (2 * outputs[index][0].shape[0], 2 * outputs[index][0].shape[1])
+        upscaled_depth_image = np.uint8(to_multichannel(
+            resize(outputs[index][0], upscaled_depth_image_shape, order=3, mode='reflect', anti_aliasing=True)) * 255)
+        upscaled_depth_image = upscaled_depth_image[:, :, 0]
+        # im5 = Image.fromarray(upscaled_depth_image).convert('L')
+        im5 = Image.fromarray(upscaled_depth_image)
+        upscaled_depth_image_name = name_pic + "_upscaled_depth.png"
+        im5.save(output_dir + "\\" + upscaled_depth_image_name)
+        logger_model.info(
+            upscaled_depth_image_name + " finished processing! Image can be found in the output_images folder.")
+
+
+def output_upscaled_input_and_depth_image(outputs, logger_model, inputs=None, loaded_input_images_name=None):
+    """
+    (Created Function)
+    Returns the upscaled depth images normalized/not-normalized and input image upscaled
+    Writes in the output folder the input and the depth image.
+    """
+
+    import matplotlib.pyplot as plt
+    from skimage.transform import resize
+    for index in range(len(outputs)):
+
+        dir = os.path.dirname(__file__)
+        # Output directory for images
+        output_dir = os.path.join(dir, 'output_images')
+
+        name_pic = loaded_input_images_name[index].split(".")
+        name_pic = name_pic[0]
+
+        # Output the input image
+        input_image = np.uint8(inputs[index] * 255)
+        im1 = Image.fromarray(input_image)
+        im1.save(output_dir + "\\" + loaded_input_images_name[index])
+        logger_model.info(
+            loaded_input_images_name[index] + " finished processing! Image can be found in the output_images folder.")
+
+        # Output the "black/white" Depth Image(width, height are the same as the input image)
+        upscaled_depth_image_shape = (2 * outputs[index][0].shape[0], 2 * outputs[index][0].shape[1])
+
+        upscaled_depth_image_normalized = to_multichannel(resize(outputs[index][0], upscaled_depth_image_shape, order=3, mode='reflect', anti_aliasing=True))
+        upscaled_depth_image_normalized = upscaled_depth_image_normalized[:,:,0]
+
+        upscaled_depth_image = np.uint8(to_multichannel(resize(outputs[index][0], upscaled_depth_image_shape, order=3, mode='reflect', anti_aliasing=True)) * 255)
+
+        upscaled_depth_image = upscaled_depth_image[:, :, 0]
+        # im5 = Image.fromarray(upscaled_depth_image).convert('L')
+        im5 = Image.fromarray(upscaled_depth_image)
+        upscaled_depth_image_name = name_pic + "_upscaled_depth.png"
+        im5.save(output_dir + "\\" + upscaled_depth_image_name)
+        logger_model.info(
+            upscaled_depth_image_name + " finished processing! Image can be found in the output_images folder.")
+
+        return input_image, upscaled_depth_image, upscaled_depth_image_normalized
+
+
+def calculate_distance_to_objects(depth_img_normalized, detections,depth_model_name, logger_model) :
+    """
+    (Created Function)
+    Calculates the distances from the camera to the objects in meters.
+    THe depth ROI is selected using the yolo output bounding box (x1,x2,y1,y2).
+    The depth ROI image values are normalized from 0 to 1.
+    The distance from camera to the object is calculated using the median of the depth image..
+    In order to find depth in meters we must multiply the result from the previous step by the maximum distance of the training dataset (10meters for NYU, 80meters for KITTI).
+    """
+
+    distances_to_objects = []
+    for index, row in detections.iterrows():
+        x1, y1, x2, y2, cls, score, w, h = row.values
+        depth_img_roi = copy.deepcopy(depth_img_normalized[y1:y2, x1:x2])
+        range_model = 0
+        # Range in meters for NYU dataset.
+        if depth_model_name == 'nyu.h5':
+            range_model = 10
+        # Range in meters for the Kitti dataset.
+        elif depth_model_name == 'kitti.h5':
+            range_model = 80
+
+        distance_to_object = calculate_distance_to_object_using_median(depth_img_roi, range_model, index, cls, logger_model)
+        distance_to_object = round(distance_to_object, 2)
+        distances_to_objects.append(distance_to_object)
+
+    detections["Distance"] = distances_to_objects
+
+
+    return detections
+
+
+def calculate_distance_to_object_using_median(depth_img_roi, range_model, index, cls, logger_model):
+    """
+    Calculates the distance to object in meters using median.
+    """
+
+    # Median Depth Image ROI
+    depth_median_normalized = np.median(depth_img_roi)
+    # Value converted in meters
+    depth_median_in_meters = depth_median_normalized * range_model
+    logger_model.info("The distance to Object_" + cls + " _ID_" + str(index) + " using median is: " + str(depth_median_in_meters) + " meters.")
+
+    return depth_median_in_meters
+
+
+def calculate_distance_to_object_using_L2norm_and_median(depth_img_roi, range_model, index, cls, logger_model, cut_off_gain, img):
+    """
+    Calculates the distance to object using L2 norm (STD) to remove outliers and then using median.
+    """
+
+    # Mean Depth Image ROI
+    depth_mean_normalized = np.mean(depth_img_roi)
+
+    # Standard Deviation ROI
+    depth_l2_normalized = np.std(depth_img_roi)
+
+    # Values converted in meters
+    depth_mean = depth_mean_normalized * range_model
+    depth_l2 = depth_l2_normalized * range_model
+
+    # User Information
+    #logger_model.info("Mean Object_" + cls + " _ID_" + str(index) + ": " + str(depth_mean) + " meters.")
+    #logger_model.info("Standard Deviation(L2) Object_" + cls + " _ID_" + str(index) + ": " + str(depth_l2) + " meters.")
+
+    cut_off_std = depth_l2_normalized * cut_off_gain
+    lower_std, upper_std = depth_mean_normalized - cut_off_std, depth_mean_normalized + cut_off_std
+
+    img[depth_img_roi < lower_std] = 0
+    img[depth_img_roi > upper_std] = 0
+
+    cv2.imshow('New Image', img)
+    cv2.waitKey(0)
+
+
+def output_yolo_image(yolo_image, logger_model, input_image_name, detections_with_distances):
+    """
+    (Created Function)
+    Output the YOLO image in output_images folder.
+    """
+
+    dir = os.path.dirname(__file__)
+    # Output directory for images
+    output_dir = os.path.join(dir, 'output_images')
+
+    input_image_name = input_image_name.split(".")
+    name_pic = input_image_name[0]
+    yolo_pic_name = name_pic + "_yolo_with_distance.png"
+    full_path = output_dir + "\\" + yolo_pic_name
+    im = Image.fromarray(yolo_image)
+    im.save(full_path)
+    logger_model.info(yolo_pic_name + " finished processing! Image can be found in the output_images folder.")
+
+
+def calculate_distances_from_object(depth_img_normalized, yolo_image, detections, depth_model_name, logger_model):
+    """
+    (Created Function)
+    Calculates the distance from the object in meters.
+    The depth ROI image values are normalized from 0 to 1.
+    The distance from camera to the object can be calculated in 3 main ways:
+    1. Calculating the median of the depth image (ROI).
+    2. Removing outliers using L2 norm and then calculating median.
+    3. Removing outliers using IQR and then calculating median.
+    In order to find depth in meters we must multiply the result from the previous step by the maximum distance of the training dataset (10meters for NYU, 80meters for KITTI).
+    """
+
+    test_images = []
+    for index, row in detections.iterrows():
+        x1, y1, x2, y2, cls, score, w, h = row.values
+        depth_img_roi = depth_img_normalized[y1:y2, x1:x2]
+        yolo_image_roi = yolo_image[y1:y2, x1:x2]
+
+        # Mean Absolute Deviation
+        # mad_l1 = np.mean(np.absolute(depth_img_roi - np.mean(depth_img_roi)))
+
+        # Mean Depth Image ROI
+        depth_mean_normalized = np.mean(depth_img_roi)
+
+        # Median Depth Image ROI
+        depth_median_normalized = np.median(depth_img_roi)
+
+        # Standard Deviation ROI
+        depth_l2_normalized = np.std(depth_img_roi)
+
+        range_model = 0
+        if depth_model_name == 'nyu.h5':
+            range_model = 10
+        elif depth_model_name == 'kitti.h5':
+            range_model = 80
+
+        # Values converted to meters
+        depth_mean = depth_mean_normalized * range_model
+        depth_median = depth_median_normalized * range_model
+        # mad_l1 = mad_l1 * range_model
+        depth_l2 = depth_l2_normalized * range_model
+        # logger_model.info("Mean Absolute Deviation(L1) Object_" + cls + " ID_" + str(index) + ": " + str(mad_l1) + " meters.")
+        logger_model.info("Mean Object_" + cls + " _ID_" + str(index) + ": " + str(depth_mean) + " meters.")
+        logger_model.info("Median Object_" + cls + " _ID_" + str(index) + ": " + str(depth_median) + " meters.")
+        logger_model.info(
+            "Standard Deviation(L2) Object_" + cls + " _ID_" + str(index) + ": " + str(depth_l2) + " meters.")
+
+        # Cut-off
+        cut_off_std = depth_l2_normalized * 3
+        lower_std, upper_std = depth_mean_normalized - cut_off_std, depth_mean_normalized + cut_off_std
+
+        """ WORKS
+        # setting threshold of gray image WORKS
+        depth_img_roi = np.uint8(depth_img_roi * 255)
+        print(depth_img_roi)
+        # 10 20 with NYU
+        edges = cv2.Canny(depth_img_roi, 10, 20)
+        print(edges)
+        ret, th2 = cv2.threshold(edges, 100, 255, cv2.THRESH_BINARY)
+
+        cv2.imshow("img", th2)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+        """
+
+        """
+        depth_img_roi = np.uint8(depth_img_roi * 255)
+        print(depth_img_roi)
+        edges = cv2.Canny(depth_img_roi, 10, 20)
+        #print(edges)
+        lines = cv2.HoughLinesP(edges, 1, np.pi / 180, 10, np.array([]), 30, 200)
+        print(lines)
+        if lines:
+            for line in lines:
+               for x1, y1, x2, y2 in line:
+                   cv2.line(depth_img_roi, (x1, y1), (x2, y2), (20, 220, 20), 3)
+
+            cv2.imshow('shapes', depth_img_roi)
+            cv2.waitKey(0)
+        """
+
+        # WORKS
+        # setting threshold of gray image WORKS
+        depth_img_roi = np.uint8(depth_img_roi * 255)
+        print(depth_img_roi)
+
+        # SHOW CANNY FILTER
+
+        ret, th2 = cv2.threshold(depth_img_roi, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        cv2.imshow("img", th2)
+        cv2.waitKey(0)
+
+        # gray = cv2.blur(depth_img_roi, (3, 3))
+        # gray = cv2.bilateralFilter(gray, 11, 17, 17)  # blur. very CPU intensive.
+        print(depth_img_roi)
+        # cv2.RETR_TREE, cv2.RETR_EXTERNAL
+        contours, hierarchy = cv2.findContours(th2, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        print(len(contours))
+        image = cv2.drawContours(depth_img_roi, contours, -1, (0, 255, 0), 3)
+        cv2.imshow("img", image)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+        # 10 20 with NYU
+        # edges = cv2.Canny(gray, 10, 20)
+
+        # img = auto_canny(depth_img_roi, 0.3)
+        # laplacian = cv2.Laplacian(depth_img_roi, cv2.CV_64FC1)
+
+        # print(img)
+
+        # ret, th2 = cv2.threshold(edges, 100, 255, cv2.THRESH_BINARY)
+        # ret, th2  = cv2.threshold(depth_img_roi,0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+        # th2 = cv2.adaptiveThreshold(depth_img_roi,255,cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY,11,2)
+        # cv2.imshow("img", th2)
+        # cv2.waitKey(0)
+
+        # CannyThresh = 0.1 * ret
+        # edges = cv2.Canny(depth_img_roi, CannyThresh, ret)
+        # cv2.imshow("img", edges)
+        # cv2.waitKey(0)
+        # contours, hierarchy = cv2.findContours(th2, cv2.RETR_EXTERNAL,  cv2.CHAIN_APPROX_SIMPLE)
+
+        # image = cv2.drawContours(depth_img_roi, contours, -1, (0, 255, 0), 2)
+
+        # cv2.imshow("img", image)
+        # cv2.waitKey(0)
+
+        cv2.destroyAllWindows()
+
+        # ret, thresh = cv2.threshold(depth_img_roi, 50, 100, cv2.THRESH_BINARY)
+        # visualize the binary image
+        # cv2.imshow('Binary image', depth_img_roi)
+        # cv2.waitKey(0)
+        # cv2.imwrite('image_thres1.jpg', thresh)
+        # cv2.destroyAllWindows()
+
+        # detect the contours on the binary image using cv2.CHAIN_APPROX_NONE
+
+        """
+        _, threshold = cv2.threshold(depth_img_roi, 5, 10, cv2.THRESH)
+
+        # using a findContours() function
+        contours, _ = cv2.findContours(
+            threshold, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+        i = 0
+
+        # list for storing names of shapes
+        for contour in contours:
+
+            # here we are ignoring first counter because
+            # findcontour function detects whole image as shape
+            if i == 0:
+                i = 1
+                continue
+
+            # cv2.approxPloyDP() function to approximate the shape
+            #approx = cv2.approxPolyDP(
+            #    contour, 0.01 * cv2.arcLength(contour, True), True)
+
+            # using drawContours() function
+            cv2.drawContours(depth_img_roi, [contour], 0, (0, 0, 255), 5)
+
+        cv2.imshow('shapes',depth_img_roi )
+        cv2.waitKey(0)
+
+
+        """
+        # q75, q25 = np.percentile(depth_img_roi, [75, 25])
+        # iqr = q75 - q25
+
+        # cut_off_iqr = iqr/8
+        # lower_iqr, upper_iqr = q25 - cut_off_iqr, q75 + cut_off_iqr
+
+        # low_med, upper_med = depth_median_normalized - (0.1 * depth_mean_normalized), depth_median_normalized + (0.1 *depth_median_normalized)
+
+        # depth_img_roi_copy = copy.deepcopy(depth_img_roi)
+        # print(depth_img_roi_copy.shape)
+
+        # yolo_image_roi[depth_img_roi_copy < low_med] = 0
+        # yolo_image_roi[depth_img_roi_copy > upper_med] = 0
+
+        # print(yolo_image_roi)
+
+        # mask = np.where(depth_img_roi_copy > lower, depth_img_roi_copy, 0)
+        # mask = np.where(mask < upper, 1, 0)
+        # print(mask)
+        # depth_img_roi_copy[indices] = 0
+
+        # yolo_image_roi[yolo_image_roi > upper] = 0
+
+        # yolo_image_roi[yolo_image_roi < lower] = 0
+
+        # yolo_image_roi[indices] = 0
+        test_images.append(yolo_image_roi)
+
+    return test_images
+
+
+
+def auto_canny(image, sigma):
+	# compute the median of the single channel pixel intensities
+	v = np.median(image)
+	# apply automatic Canny edge detection using the computed median
+	lower = int(max(0, (1.0 - sigma) * v))
+	upper = int(min(255, (1.0 + sigma) * v))
+	edged = cv2.Canny(image, lower, upper)
+	# return the edged image
+	return edged
+
+
+def unsharp_mask(image, kernel_size=(5, 5), sigma=1.0, amount=1.0, threshold=0):
+    """Return a sharpened version of the image, using an unsharp mask."""
+    blurred = cv2.GaussianBlur(image, kernel_size, sigma)
+    sharpened = float(amount + 1) * image - float(amount) * blurred
+    sharpened = np.maximum(sharpened, np.zeros(sharpened.shape))
+    sharpened = np.minimum(sharpened, 255 * np.ones(sharpened.shape))
+    sharpened = sharpened.round().astype(np.uint8)
+    if threshold > 0:
+        low_contrast_mask = np.absolute(image - blurred) < threshold
+        np.copyto(sharpened, image, where=low_contrast_mask)
+    return sharpened
+
+def output_objects_from_image(images):
+    """
+    (Created Function)
+    Used for testing purposes to see how to improve the boundaries of the object detection.
+    """
+    i = 0
+    for image in images:
+
+        dir = os.path.dirname(__file__)
+        # Output directory for images
+        output_dir = os.path.join(dir, 'output_images')
+
+        img_name = "imgx_" + str(i) + ".png"
+        full_path = output_dir + "\\" + img_name
+        im = Image.fromarray(image)
+        im.save(full_path)
+        i = i+1
+
+
+
+
+
+def draw_bbox_with_distance(img, detections, cmap, random_color=True, figsize=(10, 10), show_img=True, show_text=True):
+    """
+    (Modified Function)
+    Include the distance to the objects
+    Draw bounding boxes on the img.
+    :param img: BGR img.
+    :param detections: pandas DataFrame containing detections
+    :param random_color: assign random color for each objects
+    :param cmap: object colormap
+    :param plot_img: if plot img with bboxes
+    :return: None
+    """
+    img = np.array(img)
+    scale = max(img.shape[0:2]) / 416
+    line_width = int(2 * scale)
+    print(detections)
+    for index, row in detections.iterrows():
+        x1, y1, x2, y2, cls, score, w, h, distance = row.values
+        color = list(np.random.random(size=3) * 255) if random_color else cmap[cls]
+        cv2.rectangle(img, (x1, y1), (x2, y2), color, line_width)
+        if show_text:
+            text = f'ID:{index} {cls} {score:.1f} D:{distance}m'
+            font = cv2.FONT_HERSHEY_DUPLEX
+            font_scale = max(0.3 * scale, 0.3)
+            thickness = max(int(1 * scale), 1)
+            (text_width, text_height) = cv2.getTextSize(text, font, fontScale=font_scale, thickness=thickness)[0]
+            cv2.rectangle(img, (x1 - line_width//2, y1 - text_height), (x1 + text_width, y1), color, cv2.FILLED)
+            cv2.putText(img, text, (x1, y1), font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
+    if show_img:
+        plt.figure(figsize=figsize)
+        plt.imshow(img)
+        plt.pause(5)
+        plt.show()
+    return img
+
+
+
+def DepthNorm(x, maxDepth):
+    return maxDepth / x
+
+
+def scale_up(scale, images):
+    scaled = []
+
+    for i in range(len(images)):
+        img = images[i]
+        output_shape = (scale * img.shape[0], scale * img.shape[1])
+        scaled.append(resize(img, output_shape, order=1, preserve_range=True, mode='reflect', anti_aliasing=True))
+
+    return np.stack(scaled)
+
+
+def to_multichannel(i):
+    if i.shape[2] == 3: return i
+    i = i[:, :, 0]
+    return np.stack((i, i, i), axis=2)
+
+
+def display_images(outputs, inputs=None, gt=None, is_colormap=True, is_rescale=True):
+    import matplotlib.pyplot as plt
+    import skimage
+    from skimage.transform import resize
+
+    plasma = plt.get_cmap('plasma')
+
+    shape = (outputs[0].shape[0], outputs[0].shape[1], 3)
+
+    all_images = []
+
+    for i in range(outputs.shape[0]):
+        imgs = []
+
+        if isinstance(inputs, (list, tuple, np.ndarray)):
+            x = to_multichannel(inputs[i])
+            x = resize(x, shape, preserve_range=True, mode='reflect', anti_aliasing=True)
+            imgs.append(x)
+
+        if isinstance(gt, (list, tuple, np.ndarray)):
+            x = to_multichannel(gt[i])
+            x = resize(x, shape, preserve_range=True, mode='reflect', anti_aliasing=True)
+            imgs.append(x)
+
+        if is_colormap:
+            rescaled = outputs[i][:, :, 0]
+            if is_rescale:
+                rescaled = rescaled - np.min(rescaled)
+                rescaled = rescaled / np.max(rescaled)
+            imgs.append(plasma(rescaled)[:, :, :3])
+        else:
+            imgs.append(to_multichannel(outputs[i]))
+
+        img_set = np.hstack(imgs)
+        all_images.append(img_set)
+
+    all_images = np.stack(all_images)
+
+    return skimage.util.montage(all_images, multichannel=True, fill=(0, 0, 0))
+
+
+def save_images(filename, outputs, inputs=None, gt=None, is_colormap=True, is_rescale=False):
+    montage = display_images(outputs, inputs, is_colormap, is_rescale)
+    im = Image.fromarray(np.uint8(montage * 255))
+    im.save(filename)
+
+
+def load_test_data(test_data_zip_file='nyu_test.zip'):
+    print('Loading test data...', end='')
+    import numpy as np
+    from data import extract_zip
+    data = extract_zip(test_data_zip_file)
+    from io import BytesIO
+    rgb = np.load(BytesIO(data['eigen_test_rgb.npy']))
+    depth = np.load(BytesIO(data['eigen_test_depth.npy']))
+    crop = np.load(BytesIO(data['eigen_test_crop.npy']))
+    print('Test data loaded.\n')
+    return {'rgb': rgb, 'depth': depth, 'crop': crop}
+
+
+def compute_errors(gt, pred):
+    thresh = np.maximum((gt / pred), (pred / gt))
+    a1 = (thresh < 1.25).mean()
+    a2 = (thresh < 1.25 ** 2).mean()
+    a3 = (thresh < 1.25 ** 3).mean()
+    abs_rel = np.mean(np.abs(gt - pred) / gt)
+    rmse = (gt - pred) ** 2
+    rmse = np.sqrt(rmse.mean())
+    log_10 = (np.abs(np.log10(gt) - np.log10(pred))).mean()
+    return a1, a2, a3, abs_rel, rmse, log_10
+
+
+def evaluate(model, rgb, depth, crop, batch_size=6, verbose=False):
+    N = len(rgb)
+
+    bs = batch_size
+
+    predictions = []
+    testSetDepths = []
+
+    for i in range(N // bs):
+        x = rgb[(i) * bs:(i + 1) * bs, :, :, :]
+
+        # Compute results
+        true_y = depth[(i) * bs:(i + 1) * bs, :, :]
+        pred_y = scale_up(2, predict(model, x / 255, minDepth=10, maxDepth=1000, batch_size=bs)[:, :, :, 0]) * 10.0
+
+        # Test time augmentation: mirror image estimate
+        pred_y_flip = scale_up(2,
+                               predict(model, x[..., ::-1, :] / 255, minDepth=10, maxDepth=1000, batch_size=bs)[:, :, :,
+                               0]) * 10.0
+
+        # Crop based on Eigen et al. crop
+        true_y = true_y[:, crop[0]:crop[1] + 1, crop[2]:crop[3] + 1]
+        pred_y = pred_y[:, crop[0]:crop[1] + 1, crop[2]:crop[3] + 1]
+        pred_y_flip = pred_y_flip[:, crop[0]:crop[1] + 1, crop[2]:crop[3] + 1]
+
+        # Compute errors per image in batch
+        for j in range(len(true_y)):
+            predictions.append((0.5 * pred_y[j]) + (0.5 * np.fliplr(pred_y_flip[j])))
+            testSetDepths.append(true_y[j])
+
+    predictions = np.stack(predictions, axis=0)
+    testSetDepths = np.stack(testSetDepths, axis=0)
+
+    e = compute_errors(predictions, testSetDepths)
+
+    if verbose:
+        print("{:>10}, {:>10}, {:>10}, {:>10}, {:>10}, {:>10}".format('a1', 'a2', 'a3', 'rel', 'rms', 'log_10'))
+        print("{:10.4f}, {:10.4f}, {:10.4f}, {:10.4f}, {:10.4f}, {:10.4f}".format(e[0], e[1], e[2], e[3], e[4], e[5]))
+
+    return e
 
 
 def load_weights(model, weights_file_path):
@@ -74,7 +935,7 @@ def get_detection_data(img, model_outputs, class_names):
     df['w'] = df['x2'] - df['x1']
     df['h'] = df['y2'] - df['y1']
 
-    print(f'# of bboxes: {num_bboxes}')
+    #print(f'# of bboxes: {num_bboxes}')
     return df
 
 def read_annotation_lines(annotation_path, test_size=None, random_seed=5566):
@@ -85,8 +946,11 @@ def read_annotation_lines(annotation_path, test_size=None, random_seed=5566):
     else:
         return lines
 
+
+
 def draw_bbox(img, detections, cmap, random_color=True, figsize=(10, 10), show_img=True, show_text=True):
     """
+    (Modified Function)
     Draw bounding boxes on the img.
     :param img: BGR img.
     :param detections: pandas DataFrame containing detections
@@ -98,17 +962,12 @@ def draw_bbox(img, detections, cmap, random_color=True, figsize=(10, 10), show_i
     img = np.array(img)
     scale = max(img.shape[0:2]) / 416
     line_width = int(2 * scale)
-
-    for _, row in detections.iterrows():
+    for index, row in detections.iterrows():
         x1, y1, x2, y2, cls, score, w, h = row.values
         color = list(np.random.random(size=3) * 255) if random_color else cmap[cls]
         cv2.rectangle(img, (x1, y1), (x2, y2), color, line_width)
-        ROI = img[y1:y2, x1:x2]
-        plt.imshow(ROI)
-        print("ROI")
-        print(ROI.shape)
         if show_text:
-            text = f'{cls} {score:.2f}'
+            text = f'ID:{index} {cls} {score:.2f}'
             font = cv2.FONT_HERSHEY_DUPLEX
             font_scale = max(0.3 * scale, 0.3)
             thickness = max(int(1 * scale), 1)
@@ -118,6 +977,7 @@ def draw_bbox(img, detections, cmap, random_color=True, figsize=(10, 10), show_i
     if show_img:
         plt.figure(figsize=figsize)
         plt.imshow(img)
+        plt.pause(5)
         plt.show()
     return img
 

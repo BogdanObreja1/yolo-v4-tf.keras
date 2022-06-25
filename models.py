@@ -9,9 +9,10 @@ import tensorflow as tf
 from keras import layers, models, optimizers
 
 from custom_layers import yolov4_neck, yolov4_head, nms
-from utils import load_weights, get_detection_data, draw_bbox, voc_ap, draw_plot_func, read_txt_to_list
+from utils import load_weights, get_detection_data, draw_bbox, voc_ap, draw_plot_func, read_txt_to_list, draw_bbox_with_distance
 from config import yolo_config
 from loss import yolo_loss
+from PIL import Image
 
 
 class Yolov4(object):
@@ -106,26 +107,50 @@ class Yolov4(object):
                                 callbacks=callbacks,
                                 initial_epoch=initial_epoch)
     # raw_img: RGB
-    def predict_img(self, raw_img, random_color=True, plot_img=True, figsize=(10, 10), show_text=True, return_output=False):
-
-        print('img shape: ', raw_img.shape)
+    def predict_img(self, raw_img, logger_model, random_color=True, plot_img=True, figsize=(10, 10), show_text=True, return_output=False):
+        """
+        (Modified function)
+        Predict the objects in the image.
+        """
+        logger_model.info("Predicting objects in the input image using YOLOv4...")
         img = self.preprocess_img(raw_img)
         imgs = np.expand_dims(img, axis=0)
         pred_output = self.inference_model.predict(imgs)
         detections = get_detection_data(img=raw_img,
                                         model_outputs=pred_output,
                                         class_names=self.class_names)
-        print(detections)
-        output_img = draw_bbox(raw_img, detections, cmap=self.class_color, random_color=random_color, figsize=figsize,
-                  show_text=show_text, show_img=plot_img)
         if return_output:
+            output_img = draw_bbox(raw_img, detections, cmap=self.class_color, random_color=random_color,
+                                   figsize=figsize,
+                                   show_text=show_text, show_img=plot_img)
             return output_img, detections
         else:
             return detections
 
-    def predict(self, img_path, random_color=True, plot_img=True, figsize=(10, 10), show_text=True):
-        raw_img = cv2.imread(img_path)[:, :, ::-1]
-        return self.predict_img(raw_img, random_color, plot_img, figsize, show_text)
+    def predict(self, input_img, logger_model, random_color=True, plot_img=True, figsize=(10, 10), show_text=True, ):
+        return self.predict_img(input_img, logger_model, random_color, plot_img, figsize, show_text)
+
+    def output_yolo_image_with_distances(self, input_image, logger_model, input_image_name, detections_with_distances):
+        """
+        (Created Function)
+        Output the YOLO image (including the distances to objects) in the output_images folder.
+        """
+        yolo_image = draw_bbox_with_distance(input_image, detections_with_distances, cmap=self.class_color, random_color=True, figsize=(10,10),
+                  show_text=True, show_img=False)
+
+        dir = os.path.dirname(__file__)
+        # Output directory for images
+        output_dir = os.path.join(dir, 'output_images')
+
+        input_image_name = input_image_name.split(".")
+        name_pic = input_image_name[0]
+        yolo_pic_name = name_pic + "_yolo_with_distance.png"
+        full_path = output_dir + "\\" + yolo_pic_name
+        im = Image.fromarray(yolo_image)
+        im.save(full_path)
+        logger_model.info(yolo_pic_name + " finished processing! Image can be found in the output_images folder.")
+
+        return yolo_image
 
     def export_gt(self, annotation_path, gt_folder_path):
         with open(annotation_path) as file:
