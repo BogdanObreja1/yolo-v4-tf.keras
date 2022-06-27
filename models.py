@@ -130,7 +130,7 @@ class Yolov4(object):
     def predict(self, input_img, logger_model, random_color=True, plot_img=True, figsize=(10, 10), show_text=True, ):
         return self.predict_img(input_img, logger_model, random_color, plot_img, figsize, show_text)
 
-    def output_yolo_image_with_distances(self, input_image, logger_model, input_image_name, detections_with_distances):
+    def output_yolo_image_with_distances(self, input_image, logger_model, input_image_name, detections_with_distances, new=False, segmentation_algorithm=None):
         """
         (Created Function)
         Output the YOLO image (including the distances to objects) in the output_images folder.
@@ -144,7 +144,10 @@ class Yolov4(object):
 
         input_image_name = input_image_name.split(".")
         name_pic = input_image_name[0]
-        yolo_pic_name = name_pic + "_yolo_with_distance.png"
+        if new:
+            yolo_pic_name = name_pic + "_yolo_x_" + segmentation_algorithm + "_with_distance.png"
+        else:
+            yolo_pic_name = name_pic + "_yolo_with_distance.png"
         full_path = output_dir + "\\" + yolo_pic_name
         im = Image.fromarray(yolo_image)
         im.save(full_path)
