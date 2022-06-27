@@ -1,4 +1,4 @@
-2022-06-27 08:10:49,521:INFO:resize_input_image:img1.png has been resized from (586, 820) to (480, 640) in order to be used as input for the depth inference.
-2022-06-27 08:10:50,966:INFO:resize_input_image:img4.png has been resized from (375, 1242) to (384, 1280) in order to be used as input for the depth inference.
+2022-06-27 10:49:46,334:INFO:resize_input_image:img1.png has been resized from (586, 820) to (480, 640) in order to be used as input for the depth inference.
+2022-06-27 10:49:48,033:INFO:resize_input_image:img4.png has been resized from (375, 1242) to (384, 1280) in order to be used as input for the depth inference.
  640) in order to be used as input for the depth inference.
-2022-06-27 08:10:50,966:INFO:resize_input_image:img4.png has been resized from (375, 1242) to (384, 1280) in order to be used as input for the depth inference.
+2022-06-27 10:49:48,033:INFO:resize_input_image:img4.png has been resized from (375, 1242) to (384, 1280) in order to be used as input for the depth inference.

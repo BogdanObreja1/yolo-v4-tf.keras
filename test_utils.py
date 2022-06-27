@@ -46,12 +46,7 @@ class TestUtils(unittest.TestCase):
         self.assertEqual([image2.ndim,image2.shape[-1]], [3, 3], "Unable to convert the img2.png to RGB format")
         self.assertEqual([image3.ndim, image3.shape[-1]], [3, 3], "Unable to convert the img3.png to RGB format")
 
-
-
-
-
-
-
+        self.logger_model.handlers.pop()
 
 
 

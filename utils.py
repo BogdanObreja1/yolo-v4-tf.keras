@@ -96,6 +96,25 @@ def select_pretrained_model_for_inference(logger_model):
 
     return model_selected_name
 
+def load_demo_image(logger_model, model_name):
+    """
+    Load the demo image.
+    """
+
+    dir = os.path.dirname(__file__)
+    # Output directory for images
+    input_dir = os.path.join(dir, 'input_images', 'demo_images')
+    if model_name == "nyu.h5":
+        image_path = input_dir + "//people.png"
+
+    elif model_name == "kitti.h5":
+        image_path = input_dir +"//000296.png"
+
+    logger_model.info("Loade Image: " + str(image_path))
+
+    return [image_path]
+
+
 
 def load_images_using_tkinter(logger_model):
     """
@@ -203,7 +222,7 @@ def resize_input_image(image, logger_model, input_image_name, pretrained_model):
     Resize the input image(s) to the image sizes used during training/testing (nyu - 640, 480, kitti - 1280, 384).
     The resulting image(s) will be used as input for depth inference.
     The encoder architecture also expects the image dimensions to be divisible by 32.
-    Upscaling method used: bicubic (to retain as many details as possible)
+    Resizing method used: bicubic (to retain as many details as possible)
     (Created Function)
     """
     height , width, channels = image.shape
@@ -320,7 +339,7 @@ def output_depth_images(outputs, logger_model, inputs=None, loaded_input_images_
 def output_upscaled_input_and_depth_image(outputs, logger_model,input_shape, inputs=None, loaded_input_images_name=None ):
     """
     (Created Function)
-    Returns the upscaled depth images normalized/not-normalized and the input image
+    Returns the upscaled depth images normalized and the input image
     Writes in the output folder the input and the depth image.
     """
 
@@ -364,8 +383,8 @@ def calculate_distance_to_objects(depth_img_normalized, detections,depth_model_n
     Calculates the distances from the camera to the objects in meters.
     THe depth ROI is selected using the yolo output bounding box (x1,x2,y1,y2).
     The depth ROI image values are normalized from 0 to 1.
-    The distance from camera to the object is calculated using the median of the depth image..
-    In order to find depth in meters we must multiply the result from the previous step by the maximum distance of the training dataset (10meters for NYU, 80meters for KITTI).
+    The distance from camera to the object is calculated using the median of the depth image ROI.
+    In order to find distances in meters we must multiply the result from the previous step by the maximum distance of the training dataset (10meters for NYU, 80meters for KITTI).
     """
 
     distances_to_objects = []
@@ -570,6 +589,7 @@ def segment_box_img_using_auto_canny(depth_img_roi_normalized, rgb_img_roi, inde
 
 def save_output_segmented_box_image(output_segmented_box_image, index, logger_model, input_image_name, segmentation_mode):
     """
+    Save the output segmented object in the output_images folder.
     """
 
     dir = os.path.dirname(__file__)
@@ -595,7 +615,6 @@ def proposed_bounding_boxes_based_on_segmentation(segmented_box_images, detectio
     x1_values = []
     x2_values = []
     for depth_segmented_roi in segmented_box_images:
-        print(depth_segmented_roi.shape)
         outer_points = np.nonzero(depth_segmented_roi)
         y1 = outer_points[0].min()
         y2 = outer_points[0].max()
@@ -606,33 +625,16 @@ def proposed_bounding_boxes_based_on_segmentation(segmented_box_images, detectio
         x1_values.append(x1)
         x2_values.append(x2)
 
-        output = cv2.rectangle(depth_segmented_roi
-                               , (x1, y1), (x2, y2), (200, 0, 0), 3)
-
-
-
     detections_with_distances["y2"] = detections_with_distances["y2"] - (
                 detections_with_distances["y2"] - y2_values - detections_with_distances["y1"]) + 1
     detections_with_distances["y1"] = detections_with_distances["y1"] + y1_values
 
-    detections_with_distances["x1"] = detections_with_distances["x1"] + x1_values
     detections_with_distances["x2"] = detections_with_distances["x2"] - (detections_with_distances["x2"] - x2_values - detections_with_distances["x1"]) + 1
+    detections_with_distances["x1"] = detections_with_distances["x1"] + x1_values
     detections_with_distances["w"] = detections_with_distances["x2"] - detections_with_distances["x1"]
     detections_with_distances["h"] = detections_with_distances["y2"] - detections_with_distances["y1"]
 
     return detections_with_distances
-
-
-
-
-
-        # output = cv2.rectangle(cv2.cvtColor(depth_segmented_roi, cv2.COLOR_GRAY2BGR)
-        #                        , (left, top), (right, bottom), (0, 255, 0), 1)
-        #
-        # cv2.imshow('blob_with_bounds.png', output)
-        # cv2.waitKey(0)
-
-
 
 
 

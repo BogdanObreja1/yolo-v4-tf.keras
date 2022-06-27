@@ -128,6 +128,9 @@ class Yolov4(object):
             return detections
 
     def predict(self, input_img, logger_model, random_color=True, plot_img=True, figsize=(10, 10), show_text=True, ):
+        """
+        (Modified function)
+        """
         return self.predict_img(input_img, logger_model, random_color, plot_img, figsize, show_text)
 
     def output_yolo_image_with_distances(self, input_image, logger_model, input_image_name, detections_with_distances, new=False, segmentation_algorithm=None):
