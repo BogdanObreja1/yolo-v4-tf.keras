@@ -1,4 +1,24 @@
-2022-06-27 10:49:46,334:INFO:resize_input_image:img1.png has been resized from (586, 820) to (480, 640) in order to be used as input for the depth inference.
-2022-06-27 10:49:48,033:INFO:resize_input_image:img4.png has been resized from (375, 1242) to (384, 1280) in order to be used as input for the depth inference.
- 640) in order to be used as input for the depth inference.
-2022-06-27 10:49:48,033:INFO:resize_input_image:img4.png has been resized from (375, 1242) to (384, 1280) in order to be used as input for the depth inference.
+2022-07-01 13:50:56,217:INFO:<module>:Model loaded (nyu.h5).
+2022-07-01 13:50:56,218:INFO:load_demo_image:Loade Image: C:\Time Machine Code\yolo-v4-tf.keras\input_images\demo_images//people.png
+2022-07-01 13:50:57,184:INFO:resize_input_image:people.png has been resized from (408, 612) to (480, 640) in order to be used as input for the depth inference.
+2022-07-01 13:50:57,188:INFO:predict:Currently predicting the depth image of people.png ...
+2022-07-01 13:51:01,533:INFO:output_upscaled_input_and_depth_image:people.png finished processing! Image can be found in the output_images folder.
+2022-07-01 13:51:01,780:INFO:output_upscaled_input_and_depth_image:people_upscaled_depth.png finished processing! Image can be found in the output_images folder.
+2022-07-01 13:51:06,240:INFO:predict_img:Predicting objects in the input image using YOLOv4...
+2022-07-01 13:51:09,101:INFO:calculate_distance_to_object_using_median:The distance to Object_person _ID_0 using median is: 2.584051489830017 meters.
+2022-07-01 13:51:09,103:INFO:calculate_distance_to_object_using_median:The distance to Object_person _ID_1 using median is: 2.7112826704978943 meters.
+2022-07-01 13:51:09,104:INFO:calculate_distance_to_object_using_median:The distance to Object_person _ID_2 using median is: 2.606709599494934 meters.
+2022-07-01 13:51:09,104:INFO:calculate_distance_to_object_using_median:The distance to Object_handbag _ID_3 using median is: 3.473842442035675 meters.
+2022-07-01 13:51:09,105:INFO:calculate_distance_to_object_using_median:The distance to Object_tie _ID_4 using median is: 2.6559633016586304 meters.
+2022-07-01 13:51:09,190:INFO:output_yolo_image_with_distances:people_yolo_with_distance.png finished processing! Image can be found in the output_images folder.
+2022-07-01 13:51:09,193:INFO:segment_box_img_using_median:Object_person _ID_0 box had been segmented using median thresholding with a cutoff threshold of 0.2 !
+2022-07-01 13:51:09,199:INFO:save_output_segmented_box_image:people_yolo_z_segmentation_median_0.png finished processing! Image can be found in the output_images folder.
+2022-07-01 13:51:09,201:INFO:segment_box_img_using_median:Object_person _ID_1 box had been segmented using median thresholding with a cutoff threshold of 0.2 !
+2022-07-01 13:51:09,205:INFO:save_output_segmented_box_image:people_yolo_z_segmentation_median_1.png finished processing! Image can be found in the output_images folder.
+2022-07-01 13:51:09,206:INFO:segment_box_img_using_median:Object_person _ID_2 box had been segmented using median thresholding with a cutoff threshold of 0.2 !
+2022-07-01 13:51:09,211:INFO:save_output_segmented_box_image:people_yolo_z_segmentation_median_2.png finished processing! Image can be found in the output_images folder.
+2022-07-01 13:51:09,212:INFO:segment_box_img_using_median:Object_handbag _ID_3 box had been segmented using median thresholding with a cutoff threshold of 0.2 !
+2022-07-01 13:51:09,213:INFO:save_output_segmented_box_image:people_yolo_z_segmentation_median_3.png finished processing! Image can be found in the output_images folder.
+2022-07-01 13:51:09,214:INFO:segment_box_img_using_median:Object_tie _ID_4 box had been segmented using median thresholding with a cutoff threshold of 0.2 !
+2022-07-01 13:51:09,216:INFO:save_output_segmented_box_image:people_yolo_z_segmentation_median_4.png finished processing! Image can be found in the output_images folder.
+2022-07-01 13:51:09,285:INFO:output_yolo_image_with_distances:people_yolo_x_median_with_distance.png finished processing! Image can be found in the output_images folder.

@@ -503,7 +503,7 @@ def segment_box_img_using_iqr(depth_img_roi_normalized, rgb_img_roi, index, cls,
     iqr = q75 - q25
 
     if cut_off_gain == "default":
-        cut_off_gain = 0.125
+        cut_off_gain = 0.5
 
     cut_off_iqr = iqr * cut_off_gain
 
